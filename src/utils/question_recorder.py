@@ -18,6 +18,7 @@ import speech_recognition as sr
 from pydub import AudioSegment
 import wave
 import io
+import pyaudio
 
 @dataclass
 class ResponseMetrics:
