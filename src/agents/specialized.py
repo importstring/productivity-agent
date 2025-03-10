@@ -9,6 +9,9 @@ import logging
 import json
 import os
 from pathlib import Path
+import io
+import speech_recognition as sr
+from pydub import AudioSegment
 
 class ProductManagerAgent(BaseAgent):
     """Central coordinator agent that manages other agents and overall system state"""
@@ -912,4 +915,670 @@ class NightResearchAgent:
             
         except Exception as e:
             logging.error(f"Error in NightResearchAgent.reflect: {e}")
-            return {'error': str(e)} 
+            return {'error': str(e)}
+
+class NightlyAnalysisAgent(BaseAgent):
+    """Agent responsible for comprehensive nightly analysis of recordings"""
+    def __init__(self):
+        super().__init__("NightlyAnalysis", "analysis")
+        self.latest_recording = None
+        self.analysis_results = []
+        
+    async def analyze_latest_recording(self) -> Dict:
+        """Analyze the most recent recording session."""
+        try:
+            # Get latest recording from data directory
+            recordings_dir = Path("data/recordings")
+            if not recordings_dir.exists():
+                return {"error": "No recordings directory found"}
+                
+            # Find most recent recording
+            recordings = list(recordings_dir.glob("posture_*.avi"))
+            if not recordings:
+                return {"error": "No recordings found"}
+                
+            latest_recording = max(recordings, key=lambda x: x.stat().st_mtime)
+            analysis_file = latest_recording.with_suffix('.json')
+            
+            if not analysis_file.exists():
+                return {"error": "Analysis file not found"}
+                
+            # Load analysis data
+            with open(analysis_file, 'r') as f:
+                analysis_data = json.load(f)
+                
+            # Perform comprehensive analysis
+            posture_analysis = self._analyze_posture(analysis_data)
+            speech_analysis = self._analyze_speech(analysis_data)
+            engagement_analysis = self._analyze_engagement(analysis_data)
+            multimodal_analysis = self._analyze_multimodal_coherence(analysis_data)
+            
+            # Generate personalized baselines if not exists
+            baseline_data = self._load_or_create_baseline()
+            baseline_comparison = self._compare_with_baseline({
+                "posture": posture_analysis,
+                "speech": speech_analysis,
+                "engagement": engagement_analysis,
+                "multimodal": multimodal_analysis
+            }, baseline_data)
+            
+            # Update baseline with new data
+            self._update_baseline(baseline_data, {
+                "posture": posture_analysis,
+                "speech": speech_analysis,
+                "engagement": engagement_analysis,
+                "multimodal": multimodal_analysis
+            })
+            
+            # Generate comprehensive analysis
+            comprehensive_analysis = {
+                "recording_file": str(latest_recording),
+                "timestamp": datetime.now().isoformat(),
+                "posture_analysis": posture_analysis,
+                "speech_analysis": speech_analysis,
+                "engagement_analysis": engagement_analysis,
+                "multimodal_analysis": multimodal_analysis,
+                "baseline_comparison": baseline_comparison,
+                "improvement_suggestions": self._generate_suggestions(analysis_data),
+                "progress_metrics": self._calculate_progress_metrics(baseline_comparison)
+            }
+            
+            self.latest_recording = comprehensive_analysis
+            self.analysis_results.append(comprehensive_analysis)
+            
+            return comprehensive_analysis
+            
+        except Exception as e:
+            logging.error(f"Error in nightly analysis: {e}")
+            return {"error": str(e)}
+    
+    def _load_or_create_baseline(self) -> Dict:
+        """Load existing baseline or create new one."""
+        try:
+            baseline_file = Path("data/baselines/user_baseline.json")
+            if baseline_file.exists():
+                with open(baseline_file, 'r') as f:
+                    return json.load(f)
+            
+            # Create new baseline
+            baseline = {
+                "posture": {
+                    "shoulder_alignment": {"avg": 0.0, "count": 0},
+                    "back_straightness": {"avg": 0.0, "count": 0},
+                    "head_position": {"avg": 0.0, "count": 0},
+                    "neck_angle": {"avg": 0.0, "count": 0}
+                },
+                "speech": {
+                    "clarity": {"avg": 0.0, "count": 0},
+                    "speaking_rate": {"avg": 0.0, "count": 0},
+                    "pitch_variance": {"avg": 0.0, "count": 0}
+                },
+                "engagement": {
+                    "overall_confidence": {"avg": 0.0, "count": 0},
+                    "engagement_level": {"avg": 0.0, "count": 0}
+                },
+                "multimodal": {
+                    "coherence": {"avg": 0.0, "count": 0},
+                    "alignment": {"avg": 0.0, "count": 0}
+                },
+                "last_updated": datetime.now().isoformat()
+            }
+            
+            # Ensure directory exists
+            baseline_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Save baseline
+            with open(baseline_file, 'w') as f:
+                json.dump(baseline, f, indent=2)
+            
+            return baseline
+            
+        except Exception as e:
+            logging.error(f"Error loading/creating baseline: {e}")
+            return {}
+            
+    def _update_baseline(self, baseline: Dict, new_data: Dict) -> None:
+        """Update baseline with new analysis data."""
+        try:
+            # Update posture metrics
+            for metric, data in new_data["posture"].items():
+                if isinstance(data, dict) and "average" in data:
+                    self._update_running_average(
+                        baseline["posture"][metric],
+                        data["average"]
+                    )
+            
+            # Update speech metrics
+            for metric, data in new_data["speech"].items():
+                if isinstance(data, dict) and "average" in data:
+                    self._update_running_average(
+                        baseline["speech"][metric],
+                        data["average"]
+                    )
+            
+            # Update engagement metrics
+            for metric, data in new_data["engagement"].items():
+                if isinstance(data, dict) and "average" in data:
+                    self._update_running_average(
+                        baseline["engagement"][metric],
+                        data["average"]
+                    )
+            
+            # Update multimodal metrics
+            for metric, data in new_data["multimodal"].items():
+                if isinstance(data, dict) and "average" in data:
+                    self._update_running_average(
+                        baseline["multimodal"][metric],
+                        data["average"]
+                    )
+            
+            baseline["last_updated"] = datetime.now().isoformat()
+            
+            # Save updated baseline
+            baseline_file = Path("data/baselines/user_baseline.json")
+            with open(baseline_file, 'w') as f:
+                json.dump(baseline, f, indent=2)
+                
+        except Exception as e:
+            logging.error(f"Error updating baseline: {e}")
+            
+    def _update_running_average(self, metric: Dict, new_value: float) -> None:
+        """Update running average with new value."""
+        current_avg = metric["avg"]
+        count = metric["count"]
+        
+        # Update average
+        metric["avg"] = (current_avg * count + new_value) / (count + 1)
+        metric["count"] += 1
+            
+    def _compare_with_baseline(self, current_data: Dict, baseline: Dict) -> Dict:
+        """Compare current analysis with baseline."""
+        try:
+            comparison = {}
+            
+            # Compare each category
+            for category in ["posture", "speech", "engagement", "multimodal"]:
+                comparison[category] = {}
+                for metric, data in current_data[category].items():
+                    if isinstance(data, dict) and "average" in data:
+                        baseline_value = baseline[category][metric]["avg"]
+                        current_value = data["average"]
+                        
+                        comparison[category][metric] = {
+                            "current": float(current_value),
+                            "baseline": float(baseline_value),
+                            "improvement": float(current_value - baseline_value),
+                            "percent_change": float((current_value - baseline_value) / baseline_value * 100) if baseline_value > 0 else 0.0
+                        }
+            
+            return comparison
+            
+        except Exception as e:
+            logging.error(f"Error comparing with baseline: {e}")
+            return {}
+            
+    def _calculate_progress_metrics(self, baseline_comparison: Dict) -> Dict:
+        """Calculate overall progress metrics."""
+        try:
+            progress_metrics = {}
+            
+            for category, metrics in baseline_comparison.items():
+                category_improvements = []
+                for metric, data in metrics.items():
+                    if isinstance(data, dict) and "improvement" in data:
+                        category_improvements.append(data["improvement"])
+                
+                if category_improvements:
+                    progress_metrics[category] = {
+                        "average_improvement": float(np.mean(category_improvements)),
+                        "consistency": float(1.0 - np.std(category_improvements)),
+                        "trend": self._calculate_trend(category_improvements)
+                    }
+            
+            # Calculate overall progress score
+            all_improvements = [
+                m["improvement"]
+                for c in baseline_comparison.values()
+                for m in c.values()
+                if isinstance(m, dict) and "improvement" in m
+            ]
+            
+            if all_improvements:
+                progress_metrics["overall"] = {
+                    "score": float(np.mean(all_improvements)),
+                    "confidence": float(min(1.0, len(all_improvements) / 20)),
+                    "trend": self._calculate_trend(all_improvements)
+                }
+            
+            return progress_metrics
+            
+        except Exception as e:
+            logging.error(f"Error calculating progress metrics: {e}")
+            return {}
+    
+    def _analyze_posture(self, data: Dict) -> Dict:
+        """Analyze posture metrics in detail."""
+        metrics = data.get('metrics', [])
+        if not metrics:
+            return {"error": "No metrics found"}
+            
+        # Calculate detailed posture metrics
+        shoulder_alignment = [m['shoulder_alignment'] for m in metrics]
+        back_straightness = [m['back_straightness'] for m in metrics]
+        head_position = [m['head_position'] for m in metrics]
+        neck_angle = [m['neck_angle'] for m in metrics]
+        
+        return {
+            "shoulder_alignment": {
+                "average": np.mean(shoulder_alignment),
+                "variance": np.var(shoulder_alignment),
+                "trend": self._calculate_trend(shoulder_alignment)
+            },
+            "back_straightness": {
+                "average": np.mean(back_straightness),
+                "variance": np.var(back_straightness),
+                "trend": self._calculate_trend(back_straightness)
+            },
+            "head_position": {
+                "average": np.mean(head_position),
+                "variance": np.var(head_position),
+                "trend": self._calculate_trend(head_position)
+            },
+            "neck_angle": {
+                "average": np.mean(neck_angle),
+                "variance": np.var(neck_angle),
+                "trend": self._calculate_trend(neck_angle)
+            }
+        }
+    
+    def _analyze_speech(self, data: Dict) -> Dict:
+        """Analyze speech patterns and metrics."""
+        try:
+            audio_file = Path(data.get('filepath', '')).with_suffix('.wav')
+            if not audio_file.exists():
+                return {"error": "Audio file not found"}
+                
+            # Load audio file
+            audio = AudioSegment.from_wav(str(audio_file))
+            
+            # Calculate speech metrics
+            return {
+                "pitch": self._analyze_pitch(audio),
+                "tone": self._analyze_tone(audio),
+                "variance": self._analyze_variance(audio),
+                "clarity": self._analyze_clarity(audio),
+                "speaking_rate": self._calculate_speaking_rate(audio),
+                "transcript": self._generate_transcript(audio)
+            }
+        except Exception as e:
+            logging.error(f"Error analyzing speech: {e}")
+            return {"error": str(e)}
+    
+    def _analyze_engagement(self, data: Dict) -> Dict:
+        """Analyze overall engagement metrics."""
+        metrics = data.get('metrics', [])
+        if not metrics:
+            return {"error": "No metrics found"}
+            
+        confidence_scores = [m.get('confidence', 0) for m in metrics]
+        engagement_scores = [m.get('engagement', 0) for m in metrics]
+        
+        return {
+            "overall_confidence": {
+                "average": np.mean(confidence_scores),
+                "variance": np.var(confidence_scores),
+                "trend": self._calculate_trend(confidence_scores)
+            },
+            "engagement_level": {
+                "average": np.mean(engagement_scores),
+                "variance": np.var(engagement_scores),
+                "trend": self._calculate_trend(engagement_scores)
+            }
+        }
+    
+    def _generate_suggestions(self, data: Dict) -> List[str]:
+        """Generate improvement suggestions based on analysis."""
+        suggestions = []
+        
+        # Analyze posture metrics
+        posture = self._analyze_posture(data)
+        if posture.get('shoulder_alignment', {}).get('average', 1) < 0.8:
+            suggestions.append("Work on maintaining level shoulders during sessions")
+        if posture.get('back_straightness', {}).get('average', 1) < 0.8:
+            suggestions.append("Focus on maintaining a straighter back posture")
+        if posture.get('head_position', {}).get('average', 1) < 0.8:
+            suggestions.append("Try to keep your head more centered and level")
+            
+        # Analyze speech metrics
+        speech = self._analyze_speech(data)
+        if speech.get('clarity', {}).get('average', 1) < 0.8:
+            suggestions.append("Work on clearer articulation in speech")
+        if speech.get('variance', {}).get('score', 1) < 0.7:
+            suggestions.append("Try to add more vocal variety in your speech")
+            
+        return suggestions
+    
+    def _calculate_trend(self, values: List[float]) -> str:
+        """Calculate trend direction from a series of values."""
+        if len(values) < 2:
+            return "insufficient_data"
+            
+        slope = np.polyfit(range(len(values)), values, 1)[0]
+        if slope > 0.01:
+            return "improving"
+        elif slope < -0.01:
+            return "declining"
+        else:
+            return "stable"
+    
+    def _analyze_pitch(self, audio: AudioSegment) -> Dict:
+        """Analyze pitch patterns in audio."""
+        samples = np.array(audio.get_array_of_samples())
+        return {
+            "average": float(np.mean(samples)),
+            "variance": float(np.var(samples)),
+            "range": float(np.ptp(samples))
+        }
+    
+    def _analyze_tone(self, audio: AudioSegment) -> Dict:
+        """Analyze tone quality in audio."""
+        samples = np.array(audio.get_array_of_samples())
+        return {
+            "warmth": self._calculate_warmth(samples),
+            "brightness": self._calculate_brightness(samples),
+            "clarity": self._calculate_clarity_score(samples)
+        }
+    
+    def _analyze_variance(self, audio: AudioSegment) -> Dict:
+        """Analyze variance in speech patterns."""
+        samples = np.array(audio.get_array_of_samples())
+        return {
+            "dynamic_range": float(np.ptp(samples)),
+            "variability": float(np.var(samples)),
+            "score": float(min(1.0, np.var(samples) / (2 ** 30)))
+        }
+    
+    def _analyze_clarity(self, audio: AudioSegment) -> Dict:
+        """Analyze speech clarity."""
+        samples = np.array(audio.get_array_of_samples())
+        signal = samples[np.abs(samples) > np.mean(np.abs(samples))]
+        noise = samples[np.abs(samples) <= np.mean(np.abs(samples))]
+        
+        snr = np.mean(np.abs(signal)) / (np.mean(np.abs(noise)) if len(noise) > 0 else 1)
+        return {
+            "signal_to_noise": float(snr),
+            "average": float(min(1.0, snr / 10.0))
+        }
+    
+    def _calculate_speaking_rate(self, audio: AudioSegment) -> float:
+        """Calculate speaking rate from audio."""
+        samples = np.array(audio.get_array_of_samples())
+        energy = np.abs(samples)
+        threshold = np.mean(energy) * 1.5
+        speech_segments = np.where(energy > threshold)[0]
+        
+        if len(speech_segments) == 0:
+            return 0.0
+            
+        segment_durations = np.diff(speech_segments)
+        return float(np.mean(segment_durations) / audio.frame_rate)
+    
+    def _generate_transcript(self, audio: AudioSegment) -> str:
+        """Generate transcript from audio using speech recognition."""
+        try:
+            recognizer = sr.Recognizer()
+            with io.BytesIO() as wav_io:
+                audio.export(wav_io, format="wav")
+                with sr.AudioFile(wav_io) as source:
+                    audio_data = recognizer.record(source)
+                    return recognizer.recognize_google(audio_data)
+        except Exception as e:
+            logging.error(f"Error generating transcript: {e}")
+            return "Transcript generation failed"
+    
+    def _calculate_warmth(self, samples: np.ndarray) -> float:
+        """Calculate warmth score from audio samples."""
+        return float(min(1.0, np.mean(np.abs(samples)) / (2 ** 15)))
+    
+    def _calculate_brightness(self, samples: np.ndarray) -> float:
+        """Calculate brightness score from audio samples."""
+        return float(min(1.0, np.var(samples) / (2 ** 30)))
+    
+    def _calculate_clarity_score(self, samples: np.ndarray) -> float:
+        """Calculate clarity score from audio samples."""
+        return float(min(1.0, np.mean(np.abs(samples)) / (2 ** 15)))
+        
+    def _analyze_multimodal_coherence(self, data: Dict) -> Dict:
+        """Analyze coherence between verbal and non-verbal communication."""
+        try:
+            speech_data = self._analyze_speech(data)
+            posture_data = self._analyze_posture(data)
+            engagement_data = self._analyze_engagement(data)
+            
+            # Calculate temporal alignment
+            speech_times = [m.get('timestamp') for m in data.get('metrics', [])]
+            posture_times = [m.get('timestamp') for m in data.get('metrics', [])]
+            
+            # Analyze coherence metrics
+            coherence_scores = []
+            for i in range(len(speech_times)):
+                speech_features = self._extract_speech_features(data, i)
+                posture_features = self._extract_posture_features(data, i)
+                coherence_scores.append(self._calculate_coherence(speech_features, posture_features))
+            
+            return {
+                "overall_coherence": {
+                    "average": float(np.mean(coherence_scores)),
+                    "variance": float(np.var(coherence_scores)),
+                    "trend": self._calculate_trend(coherence_scores)
+                },
+                "speech_posture_alignment": self._analyze_alignment(speech_data, posture_data),
+                "engagement_consistency": self._analyze_consistency(engagement_data)
+            }
+            
+        except Exception as e:
+            logging.error(f"Error analyzing multimodal coherence: {e}")
+            return {"error": str(e)}
+    
+    def _extract_speech_features(self, data: Dict, index: int) -> Dict:
+        """Extract speech features for coherence analysis."""
+        metrics = data.get('metrics', [])[index]
+        return {
+            "speaking_rate": metrics.get('speaking_rate', 0),
+            "pitch": metrics.get('pitch', 0),
+            "clarity": metrics.get('clarity', 0)
+        }
+    
+    def _extract_posture_features(self, data: Dict, index: int) -> Dict:
+        """Extract posture features for coherence analysis."""
+        metrics = data.get('metrics', [])[index]
+        return {
+            "shoulder_alignment": metrics.get('shoulder_alignment', 0),
+            "back_straightness": metrics.get('back_straightness', 0),
+            "head_position": metrics.get('head_position', 0)
+        }
+    
+    def _calculate_coherence(self, speech_features: Dict, posture_features: Dict) -> float:
+        """Calculate coherence score between speech and posture features."""
+        # Normalize features
+        speech_values = np.array(list(speech_features.values()))
+        posture_values = np.array(list(posture_features.values()))
+        
+        # Calculate correlation
+        correlation = np.corrcoef(speech_values, posture_values)[0, 1]
+        return float(max(0, (correlation + 1) / 2))  # Convert to 0-1 scale
+    
+    def _analyze_alignment(self, speech_data: Dict, posture_data: Dict) -> Dict:
+        """Analyze alignment between speech and posture patterns."""
+        try:
+            speech_patterns = self._identify_speech_patterns(speech_data)
+            posture_patterns = self._identify_posture_patterns(posture_data)
+            
+            alignment_scores = []
+            for sp in speech_patterns:
+                for pp in posture_patterns:
+                    if self._check_temporal_overlap(sp, pp):
+                        alignment_scores.append(self._calculate_pattern_alignment(sp, pp))
+            
+            return {
+                "score": float(np.mean(alignment_scores)) if alignment_scores else 0.0,
+                "pattern_matches": len(alignment_scores),
+                "confidence": float(min(1.0, len(alignment_scores) / 10))
+            }
+            
+        except Exception as e:
+            logging.error(f"Error analyzing alignment: {e}")
+            return {"error": str(e)}
+    
+    def _identify_speech_patterns(self, speech_data: Dict) -> List[Dict]:
+        """Identify significant speech patterns."""
+        patterns = []
+        metrics = speech_data.get('metrics', [])
+        
+        # Use sliding window to detect patterns
+        window_size = 5
+        for i in range(len(metrics) - window_size + 1):
+            window = metrics[i:i + window_size]
+            pattern = self._detect_speech_pattern(window)
+            if pattern:
+                patterns.append(pattern)
+        
+        return patterns
+    
+    def _identify_posture_patterns(self, posture_data: Dict) -> List[Dict]:
+        """Identify significant posture patterns."""
+        patterns = []
+        metrics = posture_data.get('metrics', [])
+        
+        # Use sliding window to detect patterns
+        window_size = 5
+        for i in range(len(metrics) - window_size + 1):
+            window = metrics[i:i + window_size]
+            pattern = self._detect_posture_pattern(window)
+            if pattern:
+                patterns.append(pattern)
+        
+        return patterns
+    
+    def _detect_speech_pattern(self, window: List[Dict]) -> Optional[Dict]:
+        """Detect a significant speech pattern in a window of metrics."""
+        try:
+            # Extract key metrics
+            speaking_rates = [m.get('speaking_rate', 0) for m in window]
+            clarity_scores = [m.get('clarity', {}).get('average', 0) for m in window]
+            
+            # Calculate pattern characteristics
+            rate_trend = self._calculate_trend(speaking_rates)
+            clarity_trend = self._calculate_trend(clarity_scores)
+            
+            if rate_trend != "stable" or clarity_trend != "stable":
+                return {
+                    "start_time": window[0].get('timestamp'),
+                    "end_time": window[-1].get('timestamp'),
+                    "rate_trend": rate_trend,
+                    "clarity_trend": clarity_trend,
+                    "confidence": float(min(1.0, np.mean(clarity_scores)))
+                }
+            
+            return None
+            
+        except Exception as e:
+            logging.error(f"Error detecting speech pattern: {e}")
+            return None
+    
+    def _detect_posture_pattern(self, window: List[Dict]) -> Optional[Dict]:
+        """Detect a significant posture pattern in a window of metrics."""
+        try:
+            # Extract key metrics
+            alignments = [m.get('shoulder_alignment', 0) for m in window]
+            straightness = [m.get('back_straightness', 0) for m in window]
+            
+            # Calculate pattern characteristics
+            alignment_trend = self._calculate_trend(alignments)
+            straightness_trend = self._calculate_trend(straightness)
+            
+            if alignment_trend != "stable" or straightness_trend != "stable":
+                return {
+                    "start_time": window[0].get('timestamp'),
+                    "end_time": window[-1].get('timestamp'),
+                    "alignment_trend": alignment_trend,
+                    "straightness_trend": straightness_trend,
+                    "confidence": float(min(1.0, np.mean(alignments)))
+                }
+            
+            return None
+            
+        except Exception as e:
+            logging.error(f"Error detecting posture pattern: {e}")
+            return None
+    
+    def _check_temporal_overlap(self, pattern1: Dict, pattern2: Dict) -> bool:
+        """Check if two patterns overlap in time."""
+        start1 = datetime.fromisoformat(pattern1['start_time'])
+        end1 = datetime.fromisoformat(pattern1['end_time'])
+        start2 = datetime.fromisoformat(pattern2['start_time'])
+        end2 = datetime.fromisoformat(pattern2['end_time'])
+        
+        return (start1 <= end2) and (start2 <= end1)
+    
+    def _calculate_pattern_alignment(self, speech_pattern: Dict, posture_pattern: Dict) -> float:
+        """Calculate alignment score between speech and posture patterns."""
+        # Compare trend directions
+        speech_trends = [speech_pattern['rate_trend'], speech_pattern['clarity_trend']]
+        posture_trends = [posture_pattern['alignment_trend'], posture_pattern['straightness_trend']]
+        
+        # Calculate trend alignment
+        trend_matches = sum(1 for st in speech_trends for pt in posture_trends if st == pt)
+        trend_score = trend_matches / (len(speech_trends) * len(posture_trends))
+        
+        # Weight by confidence
+        confidence = min(speech_pattern['confidence'], posture_pattern['confidence'])
+        
+        return float(trend_score * confidence)
+    
+    def _analyze_consistency(self, engagement_data: Dict) -> Dict:
+        """Analyze consistency of engagement patterns."""
+        try:
+            metrics = engagement_data.get('metrics', [])
+            if not metrics:
+                return {"error": "No engagement metrics found"}
+            
+            # Calculate engagement stability
+            engagement_scores = [m.get('engagement', 0) for m in metrics]
+            confidence_scores = [m.get('confidence', 0) for m in metrics]
+            
+            # Detect significant changes
+            changes = self._detect_significant_changes(engagement_scores)
+            
+            return {
+                "stability": {
+                    "score": float(1.0 - np.std(engagement_scores)),
+                    "confidence": float(np.mean(confidence_scores))
+                },
+                "changes": changes,
+                "trend": self._calculate_trend(engagement_scores)
+            }
+            
+        except Exception as e:
+            logging.error(f"Error analyzing consistency: {e}")
+            return {"error": str(e)}
+    
+    def _detect_significant_changes(self, scores: List[float]) -> List[Dict]:
+        """Detect significant changes in a series of scores."""
+        changes = []
+        window_size = 3
+        threshold = 0.2  # 20% change threshold
+        
+        for i in range(len(scores) - window_size + 1):
+            window = scores[i:i + window_size]
+            avg_before = np.mean(window[:window_size//2])
+            avg_after = np.mean(window[window_size//2:])
+            
+            if abs(avg_after - avg_before) > threshold:
+                changes.append({
+                    "index": i + window_size//2,
+                    "magnitude": float(avg_after - avg_before),
+                    "confidence": float(min(1.0, abs(avg_after - avg_before) / threshold))
+                })
+        
+        return changes 

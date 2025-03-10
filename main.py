@@ -5,10 +5,12 @@ import os
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
+import json
 
 from src.agents.multi_agent_system import MultiAgentSystem
 from src.utils.recording import RecordingManager
 from src.config import load_config
+from src.agents.specialized import NightlyAnalysisAgent
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -96,8 +98,101 @@ class SystemRouter:
 		"""Handle nightly analysis session."""
 		try:
 			logger.info("Starting nightly analysis...")
-			await self.system.night_research_agent.start_research()
-			logger.info("Nightly analysis completed")
+			
+			# Initialize nightly analysis agent
+			nightly_agent = NightlyAnalysisAgent()
+			
+			# Analyze latest recording
+			analysis_result = await nightly_agent.analyze_latest_recording()
+			
+			if 'error' in analysis_result:
+				logger.error(f"Error during nightly analysis: {analysis_result['error']}")
+				return
+			
+			# Log analysis results
+			logger.info("Nightly analysis completed successfully")
+			logger.info("\nAnalysis Summary:")
+			logger.info("-----------------")
+			
+			# Posture Analysis
+			posture = analysis_result.get('posture_analysis', {})
+			logger.info("\nPosture Metrics:")
+			for metric, data in posture.items():
+				if isinstance(data, dict) and 'average' in data:
+					logger.info(f"- {metric.replace('_', ' ').title()}: {data['average']:.2f} (Trend: {data['trend']})")
+			
+			# Speech Analysis
+			speech = analysis_result.get('speech_analysis', {})
+			logger.info("\nSpeech Analysis:")
+			if 'transcript' in speech:
+				logger.info(f"Transcript: {speech['transcript']}")
+			if 'clarity' in speech:
+				logger.info(f"Clarity Score: {speech['clarity'].get('average', 0):.2f}")
+			if 'speaking_rate' in speech:
+				logger.info(f"Speaking Rate: {speech['speaking_rate']:.2f}")
+			if 'pitch' in speech:
+				pitch_data = speech['pitch']
+				logger.info(f"Pitch Variation: {pitch_data.get('variance', 0):.2f}")
+			if 'tone' in speech:
+				tone_data = speech['tone']
+				logger.info(f"Tone Quality:")
+				logger.info(f"  - Warmth: {tone_data.get('warmth', 0):.2f}")
+				logger.info(f"  - Brightness: {tone_data.get('brightness', 0):.2f}")
+				logger.info(f"  - Clarity: {tone_data.get('clarity', 0):.2f}")
+			
+			# Engagement Analysis
+			engagement = analysis_result.get('engagement_analysis', {})
+			logger.info("\nEngagement Metrics:")
+			for metric, data in engagement.items():
+				if isinstance(data, dict) and 'average' in data:
+					logger.info(f"- {metric.replace('_', ' ').title()}: {data['average']:.2f} (Trend: {data['trend']})")
+			
+			# Multimodal Analysis
+			multimodal = analysis_result.get('multimodal_analysis', {})
+			logger.info("\nMultimodal Communication Analysis:")
+			if 'overall_coherence' in multimodal:
+				coherence = multimodal['overall_coherence']
+				logger.info(f"Overall Coherence: {coherence.get('average', 0):.2f} (Trend: {coherence.get('trend', 'stable')})")
+			if 'speech_posture_alignment' in multimodal:
+				alignment = multimodal['speech_posture_alignment']
+				logger.info(f"Speech-Posture Alignment Score: {alignment.get('score', 0):.2f}")
+				logger.info(f"Pattern Matches: {alignment.get('pattern_matches', 0)}")
+			
+			# Progress Metrics
+			progress = analysis_result.get('progress_metrics', {})
+			logger.info("\nProgress Overview:")
+			if 'overall' in progress:
+				overall = progress['overall']
+				logger.info(f"Overall Progress Score: {overall.get('score', 0):.2f}")
+				logger.info(f"Confidence: {overall.get('confidence', 0):.2f}")
+				logger.info(f"Trend: {overall.get('trend', 'stable')}")
+			
+			# Category-specific Progress
+			for category in ['posture', 'speech', 'engagement', 'multimodal']:
+				if category in progress:
+					cat_progress = progress[category]
+					logger.info(f"\n{category.title()} Progress:")
+					logger.info(f"- Average Improvement: {cat_progress.get('average_improvement', 0):.2f}")
+					logger.info(f"- Consistency: {cat_progress.get('consistency', 0):.2f}")
+					logger.info(f"- Trend: {cat_progress.get('trend', 'stable')}")
+			
+			# Improvement Suggestions
+			suggestions = analysis_result.get('improvement_suggestions', [])
+			if suggestions:
+				logger.info("\nImprovement Suggestions:")
+				for suggestion in suggestions:
+					logger.info(f"- {suggestion}")
+			
+			# Save detailed analysis to file
+			analysis_file = Path("data/analysis") / f"analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+			analysis_file.parent.mkdir(parents=True, exist_ok=True)
+			with open(analysis_file, 'w') as f:
+				json.dump(analysis_result, f, indent=2)
+			
+			logger.info(f"\nDetailed analysis saved to: {analysis_file}")
+			
+			return analysis_result
+			
 		except Exception as e:
 			logger.error(f"Error during nightly analysis: {e}")
 	
