@@ -1,0 +1,60 @@
+{
+  "system": {
+    "name": "ProductivityAgent",
+    "version": "1.0.0",
+    "log_level": "INFO",
+    "data_dir": "data",
+    "log_dir": "logs"
+  },
+  "recording": {
+    "camera": {
+      "device_id": 0,
+      "frame_width": 640,
+      "frame_height": 480,
+      "fps": 30
+    },
+    "audio": {
+      "sample_rate": 44100,
+      "channels": 1,
+      "chunk_size": 1024
+    },
+    "storage": {
+      "video_format": "mp4",
+      "audio_format": "wav",
+      "recordings_dir": "data/recordings",
+      "responses_dir": "data/responses"
+    }
+  },
+  "agents": {
+    "pm": {
+      "max_tasks": 10,
+      "reflection_interval": 3600,
+      "max_memory": 1000
+    },
+    "research": {
+      "max_topics": 5,
+      "research_interval": 1800,
+      "max_knowledge_base": 10000
+    },
+    "reflection": {
+      "analysis_interval": 3600,
+      "max_insights": 100,
+      "pattern_threshold": 0.7
+    },
+    "question_generator": {
+      "questions_per_day": 3,
+      "max_history": 1000,
+      "min_interval": 3600
+    }
+  },
+  "processing": {
+    "daily_cycle_interval": 86400,
+    "overnight_processing_time": "00:00",
+    "max_processing_time": 3600
+  },
+  "storage": {
+    "type": "file",
+    "path": "data",
+    "backup_interval": 86400
+  }
+}
