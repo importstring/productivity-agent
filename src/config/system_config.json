@@ -26,25 +26,17 @@
     }
   },
   "agents": {
-    "pm": {
-      "max_tasks": 10,
-      "reflection_interval": 3600,
-      "max_memory": 1000
+    "product_manager": {
+      "model": "llama2:7b",
+      "meeting_time": "07:30"
     },
     "research": {
-      "max_topics": 5,
-      "research_interval": 1800,
-      "max_knowledge_base": 10000
+      "model": "llama2:250m",
+      "topics_per_cycle": 3
     },
-    "reflection": {
-      "analysis_interval": 3600,
-      "max_insights": 100,
-      "pattern_threshold": 0.7
-    },
-    "question_generator": {
-      "questions_per_day": 3,
-      "max_history": 1000,
-      "min_interval": 3600
+    "insights": {
+      "model": "llama2:250m",
+      "analysis_interval": 300
     }
   },
   "processing": {
@@ -55,6 +47,10 @@
   "storage": {
     "type": "file",
     "path": "data",
-    "backup_interval": 86400
+    "backup_interval": 3600
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "logs/productivity_agent.log"
   }
 }

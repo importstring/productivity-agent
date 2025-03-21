@@ -22,8 +22,8 @@ wheels/
 
 # Virtual Environment
 venv/
-env/
 ENV/
+env/
 
 # IDE
 .idea/
@@ -35,15 +35,15 @@ ENV/
 logs/
 *.log
 
-# Local configuration
+# Data
+data/
+*.json
+!src/config/system_config.json
+
+# Environment variables
 .env
 .env.*
 
 # OS
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db 

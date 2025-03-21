@@ -21,6 +21,7 @@ from .agents.specialized import (
     PersonalDevelopmentAgent,
     NightResearchAgent
 )
+from .utils.recording import RecordingManager
 
 class MultiAgentSystem:
     """Main system class coordinating all agents."""
@@ -38,6 +39,7 @@ class MultiAgentSystem:
         self.learning_agent = LearningAgent(self.config)
         self.personal_dev_agent = PersonalDevelopmentAgent(self.config)
         self.night_research_agent = NightResearchAgent(self.config)
+        self.recording_manager = RecordingManager(self.config)
         
         # Register agents with PM
         self.pm_agent.register_agent("research", self.research_agent)
@@ -256,38 +258,225 @@ class MultiAgentSystem:
     async def _prepare_night_research(self):
         """Prepare for night research."""
         try:
-            # Get current schedule and fitness data
+            # Get all relevant data
             schedule = await self._get_current_schedule()
             fitness_data = await self._get_fitness_data()
+            recording_data = await self._get_recording_data()
+            posture_data = await self._get_posture_data()
             
-            # Update personal development agent
-            await self.personal_dev_agent.process({
+            # Get insights from previous day
+            insights_file = Path("data/insights.json")
+            previous_insights = {}
+            if insights_file.exists():
+                with open(insights_file, 'r') as f:
+                    insights_data = json.load(f)
+                    # Get insights from last 24 hours
+                    current_time = datetime.now()
+                    previous_insights = {
+                        k: v for k, v in insights_data.get('insights', {}).items()
+                        if (current_time - datetime.fromisoformat(v['timestamp'])).total_seconds() <= 86400
+                    }
+            
+            # Get research topics from previous day
+            research_file = Path("data/research.json")
+            previous_research = {}
+            if research_file.exists():
+                with open(research_file, 'r') as f:
+                    research_data = json.load(f)
+                    # Get research from last 24 hours
+                    current_time = datetime.now()
+                    previous_research = {
+                        k: v for k, v in research_data.get('topics', {}).items()
+                        if (current_time - datetime.fromisoformat(v['timestamp'])).total_seconds() <= 86400
+                    }
+            
+            # Prepare comprehensive data for night research
+            research_data = {
                 'schedule': schedule,
-                'fitness_data': fitness_data
-            })
+                'fitness_data': fitness_data,
+                'recording_data': recording_data,
+                'posture_data': posture_data,
+                'previous_insights': previous_insights,
+                'previous_research': previous_research,
+                'system_state': {
+                    'is_running': self.is_running,
+                    'active_research': list(self.active_research.keys()),
+                    'research_topics': self.research_topics
+                },
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Update personal development agent with comprehensive data
+            await self.personal_dev_agent.process(research_data)
+            
+            # Store research preparation data
+            prep_file = Path("data/night_research_prep.json")
+            prep_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(prep_file, 'w') as f:
+                json.dump(research_data, f, indent=2)
+            
+            self.logger.info("Night research preparation completed successfully")
             
         except Exception as e:
             self.logger.error(f"Error preparing night research: {e}")
             
     async def _get_current_schedule(self) -> Dict:
         """Get current schedule data."""
-        # TODO: Implement schedule retrieval
-        return {}
+        try:
+            schedule_file = Path("data/schedule.json")
+            if not schedule_file.exists():
+                return {"error": "No schedule file found"}
+                
+            with open(schedule_file, 'r') as f:
+                schedule_data = json.load(f)
+                
+            # Get current date and time
+            current_date = datetime.now().date()
+            current_time = datetime.now().time()
+            
+            # Find current and upcoming tasks
+            current_tasks = []
+            upcoming_tasks = []
+            
+            for task in schedule_data.get('tasks', []):
+                task_date = datetime.fromisoformat(task['date']).date()
+                task_time = datetime.fromisoformat(task['time']).time()
+                
+                if task_date == current_date:
+                    if task_time <= current_time:
+                        current_tasks.append(task)
+                    else:
+                        upcoming_tasks.append(task)
+                elif task_date > current_date:
+                    upcoming_tasks.append(task)
+            
+            return {
+                'current_tasks': current_tasks,
+                'upcoming_tasks': upcoming_tasks,
+                'current_date': current_date.isoformat(),
+                'current_time': current_time.isoformat(),
+                'timestamp': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error getting schedule data: {e}")
+            return {"error": str(e)}
         
     async def _get_fitness_data(self) -> Dict:
         """Get fitness data."""
-        # TODO: Implement fitness data retrieval
-        return {}
+        try:
+            fitness_file = Path("data/fitness.json")
+            if not fitness_file.exists():
+                return {"error": "No fitness data file found"}
+                
+            with open(fitness_file, 'r') as f:
+                fitness_data = json.load(f)
+            
+            # Get latest workout data
+            workouts = fitness_data.get('workouts', [])
+            latest_workout = max(workouts, key=lambda x: x['timestamp']) if workouts else None
+            
+            # Calculate weekly averages
+            current_date = datetime.now()
+            week_ago = current_date - timedelta(days=7)
+            
+            recent_workouts = [
+                w for w in workouts 
+                if datetime.fromisoformat(w['timestamp']) >= week_ago
+            ]
+            
+            weekly_stats = {
+                'total_workouts': len(recent_workouts),
+                'average_duration': sum(w.get('duration', 0) for w in recent_workouts) / len(recent_workouts) if recent_workouts else 0,
+                'average_intensity': sum(w.get('intensity', 0) for w in recent_workouts) / len(recent_workouts) if recent_workouts else 0,
+                'total_calories': sum(w.get('calories_burned', 0) for w in recent_workouts)
+            }
+            
+            return {
+                'latest_workout': latest_workout,
+                'weekly_stats': weekly_stats,
+                'fitness_goals': fitness_data.get('goals', {}),
+                'timestamp': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error getting fitness data: {e}")
+            return {"error": str(e)}
         
     async def _get_recording_data(self) -> Dict:
         """Get presentation recording data."""
-        # TODO: Implement recording data retrieval
-        return {}
+        try:
+            recordings_dir = Path("data/recordings")
+            if not recordings_dir.exists():
+                return {"error": "No recordings directory found"}
+                
+            # Find most recent presentation recording
+            recordings = list(recordings_dir.glob("presentation_*.avi"))
+            if not recordings:
+                return {"error": "No presentation recordings found"}
+                
+            latest_recording = max(recordings, key=lambda x: x.stat().st_mtime)
+            analysis_file = latest_recording.with_suffix('.json')
+            
+            if not analysis_file.exists():
+                return {"error": "Analysis file not found"}
+                
+            # Load analysis data
+            with open(analysis_file, 'r') as f:
+                analysis_data = json.load(f)
+            
+            # Get realtime metrics if available
+            realtime_metrics = await self.recording_manager.get_realtime_metrics()
+            
+            return {
+                "latest_recording": str(latest_recording),
+                "analysis_file": str(analysis_file),
+                "analysis_data": analysis_data,
+                "realtime_metrics": realtime_metrics.__dict__ if realtime_metrics else None,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error getting recording data: {e}")
+            return {"error": str(e)}
         
     async def _get_posture_data(self) -> Dict:
         """Get posture monitoring data."""
-        # TODO: Implement posture data retrieval
-        return {}
+        try:
+            # Get latest recording
+            recordings_dir = Path("data/recordings")
+            if not recordings_dir.exists():
+                return {"error": "No recordings directory found"}
+                
+            # Find most recent recording
+            recordings = list(recordings_dir.glob("posture_*.avi"))
+            if not recordings:
+                return {"error": "No recordings found"}
+                
+            latest_recording = max(recordings, key=lambda x: x.stat().st_mtime)
+            analysis_file = latest_recording.with_suffix('.json')
+            
+            if not analysis_file.exists():
+                return {"error": "Analysis file not found"}
+                
+            # Load analysis data
+            with open(analysis_file, 'r') as f:
+                analysis_data = json.load(f)
+            
+            # Get realtime metrics if available
+            realtime_metrics = await self.recording_manager.get_realtime_metrics()
+            
+            return {
+                "latest_recording": str(latest_recording),
+                "analysis_file": str(analysis_file),
+                "analysis_data": analysis_data,
+                "realtime_metrics": realtime_metrics.__dict__ if realtime_metrics else None,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error getting posture data: {e}")
+            return {"error": str(e)}
         
     async def _continuous_research(self):
         """Run continuous research in the background."""

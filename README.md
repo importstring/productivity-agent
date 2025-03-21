@@ -1,40 +1,12 @@
 # Posture Recording and Analysis System
 
-This system allows you to record posture videos and get them analyzed automatically. You can either record and send videos via email, or use the real-time streaming system.
+This system allows you to record posture videos and get them analyzed automatically using email-based submission.
 
-## Email-Based Recording (Recommended)
+## Setup Instructions
 
-This is the simplest way to use the system. You record a video on your phone/MacBook, send it via email, and receive the analysis results back via email.
+### 1. Yahoo Mail Setup
 
-### Email Provider Setup
-
-You can use any of the following email providers:
-
-1. SMTP2GO (Recommended)
-
-   - Sign up for a free account at [smtp2go.com](https://smtp2go.com)
-   - Get up to 1,000 emails per month free
-   - Excellent deliverability (96%)
-   - Easy setup process:
-     1. Create an account
-     2. Go to Settings > API Keys
-     3. Generate a new API key
-     4. Use this as your password in the configuration
-
-2. Outlook
-
-   - Use your existing Outlook/Hotmail account
-   - Enable "Less secure app access" in account settings
-   - Use your regular email and password
-
-3. Yahoo
-   - Use your existing Yahoo account
-   - Generate an "App Password" in account settings
-   - Use this as your password in the configuration
-
-### Yahoo Mail Setup
-
-Since you're using communication_analysis@yahoo.com, follow these steps to set up Yahoo Mail:
+The system is configured to use communication_analysis@yahoo.com. You'll need to:
 
 1. Generate an App Password (required for security):
 
@@ -46,46 +18,25 @@ Since you're using communication_analysis@yahoo.com, follow these steps to set u
    - Click "Generate"
    - Copy the generated 16-character password
 
-2. Set up environment variables with your Yahoo credentials:
+2. Set up environment variables:
 
    ```bash
    # On Windows (Command Prompt)
-   set EMAIL_ADDRESS=communication_analysis@yahoo.com
    set EMAIL_PASSWORD=your-16-char-app-password
-   set EMAIL_PROVIDER=yahoo
-   set ANALYSIS_EMAIL=communication_analysis@yahoo.com
 
    # On Mac/Linux
-   export EMAIL_ADDRESS=communication_analysis@yahoo.com
    export EMAIL_PASSWORD=your-16-char-app-password
-   export EMAIL_PROVIDER=yahoo
-   export ANALYSIS_EMAIL=communication_analysis@yahoo.com
    ```
 
-### Setup
+### 2. Install Dependencies
 
 1. Install Python 3.8 or higher
 2. Install the required dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-3. Set up environment variables:
 
-   ```bash
-   # On Windows (Command Prompt)
-   set EMAIL_ADDRESS=your.email@example.com
-   set EMAIL_PASSWORD=your-password-or-api-key
-   set EMAIL_PROVIDER=smtp2go  # or outlook, yahoo
-   set ANALYSIS_EMAIL=analysis.email@example.com
-
-   # On Mac/Linux
-   export EMAIL_ADDRESS=your.email@example.com
-   export EMAIL_PASSWORD=your-password-or-api-key
-   export EMAIL_PROVIDER=smtp2go  # or outlook, yahoo
-   export ANALYSIS_EMAIL=analysis.email@example.com
-   ```
-
-### Recording and Sending Videos
+### 3. Record and Send Videos
 
 1. Run the recording script:
    ```bash
@@ -95,63 +46,28 @@ Since you're using communication_analysis@yahoo.com, follow these steps to set u
    - Open your camera
    - Show a preview window
    - Record for 5 minutes (or press 'q' to stop early)
-   - Automatically send the recording to the analysis email
+   - Automatically send the recording to communication_analysis@yahoo.com
    - Save a local copy in the `recordings` directory
 
-### Analysis Server Setup
+### 4. Analysis Server Setup
 
-1. On your Windows computer, set up the environment variables as described above
+1. On your Windows computer, set up the same environment variable:
+   ```bash
+   set EMAIL_PASSWORD=your-16-char-app-password
+   ```
 2. Run the analysis server:
    ```bash
    python src/utils/email_recording.py
    ```
 3. The server will:
-   - Monitor the specified email address for new recordings
+   - Monitor communication_analysis@yahoo.com for new recordings
    - Process any received videos
    - Send back analysis results via email
-
-## Real-Time Streaming System (Alternative)
-
-If you prefer real-time analysis, you can use the streaming system instead.
-
-### Windows Computer (Server)
-
-1. Install Python 3.8 or higher
-2. Install the required dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Run the server:
-   ```bash
-   python src/utils/remote_recording_server.py
-   ```
-4. Note your computer's IP address (you can find it using `ipconfig` in Command Prompt)
-
-### Phone/MacBook (Client)
-
-1. Install Python 3.8 or higher
-2. Install the required dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Edit the client configuration in `src/utils/remote_recorder_client.py`:
-   ```python
-   config = {
-       "output_dir": "recordings",
-       "server_host": "YOUR_WINDOWS_IP",  # Replace with your Windows computer's IP
-       "server_port": 5000
-   }
-   ```
-4. Run the client:
-   ```bash
-   python src/utils/remote_recorder_client.py
-   ```
 
 ## Features
 
 - Video recording with preview
 - Email-based submission and analysis
-- Real-time streaming option
 - Pose detection and analysis using MediaPipe
 - Calculation of posture metrics:
   - Shoulder alignment
@@ -179,9 +95,9 @@ The summary file contains:
 
 1. Email Issues:
 
-   - Make sure you're using an App Password for Gmail
-   - Check your email settings and permissions
-   - Verify the email addresses are correct
+   - Make sure you're using the App Password, not your regular Yahoo password
+   - Check your Yahoo spam folder if emails aren't arriving
+   - Verify that the App Password was generated correctly
 
 2. Camera Issues:
 
@@ -196,10 +112,10 @@ The summary file contains:
 
 ## Security Notes
 
-- The system uses Gmail's secure SMTP and IMAP protocols
-- App Passwords are required for Gmail accounts
-- Keep your email credentials secure
-- Don't share your App Password with anyone
+- The system uses Yahoo Mail's secure SSL/TLS protocols
+- App Passwords are required for security
+- Keep your App Password secure and never share it
+- The system only communicates with communication_analysis@yahoo.com
 
 ## Contributing
 

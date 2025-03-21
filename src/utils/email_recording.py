@@ -411,15 +411,21 @@ def main():
             }
         },
         "email": {
-            "address": os.getenv("EMAIL_ADDRESS"),
-            "password": os.getenv("EMAIL_PASSWORD")
+            "address": os.getenv("EMAIL_ADDRESS", "communication_analysis@yahoo.com"),
+            "password": os.getenv("EMAIL_PASSWORD"),  # Must be set via environment variable
+            "provider": "yahoo"
         }
     }
+    
+    if not config["email"]["password"]:
+        logging.error("EMAIL_PASSWORD environment variable must be set")
+        return
     
     # Create and start manager
     manager = EmailRecordingManager(config)
     
     try:
+        logging.info(f"Starting email monitoring for {config['email']['address']}")
         manager.start_monitoring()
     except KeyboardInterrupt:
         logging.info("System stopped by user")

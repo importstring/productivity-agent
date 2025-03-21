@@ -763,6 +763,179 @@ class PersonalDevelopmentAgent:
             logging.error(f"Error in PersonalDevelopmentAgent.reflect: {e}")
             return {'error': str(e)}
 
+    async def _collect_responses(self, data: Dict) -> Dict:
+        """Collect and analyze responses."""
+        try:
+            # Get questions and responses
+            questions = data.get('questions', [])
+            responses = []
+            
+            for question in questions:
+                # Generate response using LLM
+                prompt = f"""
+                Provide a thoughtful response to this question:
+                {question}
+                
+                Consider:
+                1. Personal development goals
+                2. Previous experiences
+                3. Current challenges
+                4. Future aspirations
+                """
+                
+                response = self.ollama.generate(
+                    model='llama2',
+                    prompt=prompt,
+                    system="You are a personal development coach providing thoughtful responses."
+                )
+                
+                responses.append({
+                    'question': question,
+                    'response': response['response'],
+                    'timestamp': datetime.now().isoformat()
+                })
+            
+            # Analyze response patterns
+            analysis = self._analyze_responses(responses)
+            
+            return {
+                'responses': responses,
+                'analysis': analysis,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logging.error(f"Error collecting responses: {e}")
+            return {'error': str(e)}
+    
+    async def _analyze_recording(self, recording_data: Dict) -> Dict:
+        """Analyze recording data for insights."""
+        try:
+            # Extract metrics from recording data
+            metrics = recording_data.get('analysis_data', {}).get('metrics', [])
+            if not metrics:
+                return {"error": "No metrics found in recording data"}
+            
+            # Calculate averages and trends
+            analysis = {
+                'speaking_rate': self._calculate_average_and_trend([m.get('speaking_rate', 0) for m in metrics]),
+                'clarity': self._calculate_average_and_trend([m.get('clarity', 0) for m in metrics]),
+                'confidence': self._calculate_average_and_trend([m.get('confidence', 0) for m in metrics]),
+                'engagement': self._calculate_average_and_trend([m.get('engagement', 0) for m in metrics])
+            }
+            
+            # Identify patterns and anomalies
+            patterns = self._identify_patterns(metrics)
+            anomalies = self._detect_anomalies(metrics)
+            
+            # Generate improvement suggestions
+            suggestions = self._generate_improvement_suggestions(analysis, patterns, anomalies)
+            
+            return {
+                'analysis': analysis,
+                'patterns': patterns,
+                'anomalies': anomalies,
+                'suggestions': suggestions,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logging.error(f"Error analyzing recording: {e}")
+            return {'error': str(e)}
+    
+    def _calculate_average_and_trend(self, values: List[float]) -> Dict:
+        """Calculate average and trend of a metric."""
+        if not values:
+            return {'average': 0, 'trend': 'stable'}
+        
+        average = sum(values) / len(values)
+        
+        # Calculate trend using linear regression
+        x = np.arange(len(values))
+        slope = np.polyfit(x, values, 1)[0]
+        
+        if slope > 0.1:
+            trend = 'increasing'
+        elif slope < -0.1:
+            trend = 'decreasing'
+        else:
+            trend = 'stable'
+        
+        return {
+            'average': float(average),
+            'trend': trend
+        }
+    
+    def _identify_patterns(self, metrics: List[Dict]) -> List[Dict]:
+        """Identify patterns in metrics."""
+        patterns = []
+        
+        # Look for consistent patterns
+        for metric in ['speaking_rate', 'clarity', 'confidence', 'engagement']:
+            values = [m.get(metric, 0) for m in metrics]
+            if len(values) >= 3:
+                # Check for consistent improvement
+                if all(values[i] <= values[i+1] for i in range(len(values)-1)):
+                    patterns.append({
+                        'type': 'consistent_improvement',
+                        'metric': metric,
+                        'confidence': 0.8
+                    })
+                # Check for consistent decline
+                elif all(values[i] >= values[i+1] for i in range(len(values)-1)):
+                    patterns.append({
+                        'type': 'consistent_decline',
+                        'metric': metric,
+                        'confidence': 0.8
+                    })
+        
+        return patterns
+    
+    def _detect_anomalies(self, metrics: List[Dict]) -> List[Dict]:
+        """Detect anomalies in metrics."""
+        anomalies = []
+        
+        for metric in ['speaking_rate', 'clarity', 'confidence', 'engagement']:
+            values = [m.get(metric, 0) for m in metrics]
+            if len(values) >= 3:
+                mean = np.mean(values)
+                std = np.std(values)
+                
+                # Detect values more than 2 standard deviations from mean
+                for i, value in enumerate(values):
+                    if abs(value - mean) > 2 * std:
+                        anomalies.append({
+                            'metric': metric,
+                            'value': float(value),
+                            'timestamp': metrics[i].get('timestamp'),
+                            'severity': 'high' if abs(value - mean) > 3 * std else 'medium'
+                        })
+        
+        return anomalies
+    
+    def _generate_improvement_suggestions(self, analysis: Dict, patterns: List[Dict], anomalies: List[Dict]) -> List[str]:
+        """Generate improvement suggestions based on analysis."""
+        suggestions = []
+        
+        # Analyze trends
+        for metric, data in analysis.items():
+            if data['trend'] == 'decreasing':
+                suggestions.append(f"Your {metric.replace('_', ' ')} has been declining. Consider practicing more to maintain consistency.")
+            elif data['trend'] == 'increasing':
+                suggestions.append(f"Great progress in {metric.replace('_', ' ')}! Keep up the good work.")
+        
+        # Address patterns
+        for pattern in patterns:
+            if pattern['type'] == 'consistent_decline':
+                suggestions.append(f"Your {pattern['metric'].replace('_', ' ')} has been consistently declining. Consider reviewing your approach.")
+        
+        # Address anomalies
+        for anomaly in anomalies:
+            if anomaly['severity'] == 'high':
+                suggestions.append(f"Significant fluctuation detected in {anomaly['metric'].replace('_', ' ')}. Review what might have caused this change.")
+        
+        return suggestions
+
 class NightResearchAgent:
     """Agent responsible for night-time research and processing."""
     

@@ -183,18 +183,35 @@ def main():
         }
     }
     
+    if not config["email"]["password"]:
+        print("\nERROR: EMAIL_PASSWORD environment variable must be set")
+        print("Please set up your Yahoo Mail App Password:")
+        print("1. Sign in to your Yahoo account")
+        print("2. Go to Account Security settings")
+        print("3. Scroll down to 'Generate app password'")
+        print("4. Select 'Other app' and enter 'Posture Analysis'")
+        print("5. Copy the generated password")
+        print("\nThen set the environment variable:")
+        print("export EMAIL_PASSWORD=your-16-char-app-password")
+        return
+    
     # Create recorder
     recorder = VideoRecorder(config)
     
     try:
+        print("\nStarting posture recording...")
+        print("- Press 'q' to stop recording early")
+        print("- Recording will automatically stop after 5 minutes")
+        print("- Video will be sent to", config["email"]["recipient"])
+        
         # Record video (5 minutes by default)
         filepath = recorder.record_video(duration=300)
         
         if filepath:
+            print("\nRecording completed. Sending video for analysis...")
             # Send video
             recorder.send_video(filepath)
-            
-            print("\nRecording completed and sent for analysis.")
+            print("\nVideo sent successfully!")
             print("You will receive the analysis results via email.")
         else:
             print("\nFailed to record video.")
