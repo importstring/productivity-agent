@@ -5,23 +5,12 @@ import os
 from datetime import datetime
 from pathlib import Path
 import json
-import sys
 
-# Import real implementations
+from src.agents.multi_agent_system import MultiAgentSystem
+from src.utils.recording import RecordingManager
 from src.config import load_config
-try:
-	from src.agents.multi_agent_system import MultiAgentSystem
-	from src.utils.recording import RecordingManager
-	from src.agents.specialized import NightlyAnalysisAgent
-	from src.agents.question_recorder import QuestionRecorder
-	USE_MOCKS = False
-except ImportError:
-	# If the real implementations fail to import (e.g., due to memory constraints),
-	# use mock implementations for testing
-	from src.agents.mock_multi_agent_system import MultiAgentSystem
-	from src.utils.mock_recording import RecordingManager
-	from src.agents.mock_specialized import NightlyAnalysisAgent, QuestionRecorder
-	USE_MOCKS = True
+from src.agents.specialized import NightlyAnalysisAgent
+from src.agents.question_recorder import QuestionRecorder
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -53,7 +42,6 @@ class SystemRouter:
 			self.system = MultiAgentSystem(self.config)
 			self.recording_manager = RecordingManager(self.config)
 			self.is_running = True
-			logger.info(f"Using {'mock' if USE_MOCKS else 'real'} implementations")
 		except Exception as e:
 			logger.error(f"Failed to initialize SystemRouter: {e}")
 			raise
@@ -88,23 +76,6 @@ class SystemRouter:
 			
 			# Create data directory if it doesn't exist
 			os.makedirs("data/recordings", exist_ok=True)
-			
-			# For testing, we'll create a mock recording file
-			if USE_MOCKS:
-				mock_recording = Path("data/recordings") / f"{session_id}.json"
-				with open(mock_recording, 'w') as f:
-					json.dump({
-						"session_id": session_id,
-						"timestamp": datetime.now().isoformat(),
-						"duration": duration,
-						"metrics": {
-							"head_position": 0.85,
-							"shoulder_alignment": 0.78,
-							"back_straightness": 0.92
-						}
-					}, f, indent=2)
-				logger.info(f"Created mock recording: {mock_recording}")
-				return {"status": "success", "filepath": str(mock_recording)}
 			
 			# Start recording
 			result = await self.recording_manager.start_recording(session_id)
@@ -187,7 +158,7 @@ class SystemRouter:
 			try:
 				# Monitor response metrics in real-time
 				start_time = datetime.now()
-				while (datetime.now() - start_time).total_seconds() < 10:  # 10-second session for testing
+				while (datetime.now() - start_time).total_seconds() < 300:  # 5-minute session
 					metrics = await question_recorder.get_realtime_metrics()
 					if metrics:
 						logger.info(f"Response metrics: {metrics}")
@@ -234,23 +205,18 @@ class SystemRouter:
 			responses = []
 			for question in questions:
 				try:
-					# In testing mode, generate mock responses
-					if USE_MOCKS:
-						response = f"Mock response to: {question}"
-					else:
-						# Get response from system
-						response = await self.system.process_question({
-							'question': question,
-							'type': 'written',
-							'timestamp': datetime.now().isoformat()
-						})
+					# Get response from system
+					response = await self.system.process_question({
+						'question': question,
+						'type': 'written',
+						'timestamp': datetime.now().isoformat()
+					})
 					
 					responses.append({
 						'question': question,
 						'response': response,
 						'timestamp': datetime.now().isoformat()
 					})
-					logger.info(f"Processed question: {question}")
 				except Exception as e:
 					logger.error(f"Error processing question '{question}': {e}")
 					responses.append({
@@ -307,7 +273,6 @@ class SystemRouter:
 						with open(output_file, 'w') as f:
 							json.dump(input_data[data_type], f, indent=2)
 						results[data_type] = "Updated successfully"
-						logger.info(f"Processed {data_type} data successfully")
 					except Exception as e:
 						logger.error(f"Error processing {data_type} data: {e}")
 						results[data_type] = f"Error: {str(e)}"
@@ -335,46 +300,9 @@ async def main():
 		
 		# Initialize the system router
 		router = SystemRouter()
+		await router.start()
 		
 		try:
-			# For testing, we'll automatically test each function
-			test_mode = '--test' in sys.argv
-			
-			if test_mode:
-				logger.info("TESTING MODE ACTIVATED")
-				logger.info("=====================")
-				
-				# Test 1: Posture Recording
-				logger.info("Test 1: Posture Recording")
-				result = await router.handle_posture_recording(duration=5)  # 5 seconds for testing
-				logger.info(f"Posture recording result: {result}")
-				
-				# Test 2: Nightly Analysis
-				logger.info("\nTest 2: Nightly Analysis")
-				result = await router.handle_nightly_analysis()
-				logger.info(f"Nightly analysis completed")
-				
-				# Test 3: Verbal Questions
-				logger.info("\nTest 3: Verbal Questions")
-				result = await router.handle_verbal_questions()
-				logger.info(f"Verbal questions result: {result}")
-				
-				# Test 4: Written Questions
-				logger.info("\nTest 4: Written Questions")
-				result = await router.handle_written_questions()
-				logger.info(f"Written questions result: {result}")
-				
-				# Test 5: Data Insertion
-				logger.info("\nTest 5: Data Insertion")
-				result = await router.handle_data_insertion()
-				logger.info(f"Data insertion result: {result}")
-				
-				logger.info("\nAll tests completed successfully!")
-				return
-			
-			# Normal interactive mode
-			await router.start()
-			
 			while router.is_running:
 				print("\nProductivity Agent System")
 				print("------------------------")

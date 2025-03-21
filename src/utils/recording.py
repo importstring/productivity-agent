@@ -9,13 +9,14 @@ import json
 from pathlib import Path
 import mediapipe as mp
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 import asyncio
 from dataclasses import dataclass
 import threading
 import queue
 import os
 import time
+import random
 
 @dataclass
 class PostureMetrics:
@@ -27,44 +28,71 @@ class PostureMetrics:
     timestamp: str
     confidence: float
 
+# Add test mode flag
+TEST_MODE = os.environ.get("TEST_MODE", "false").lower() == "true"
+
 class RecordingManager:
     """Manages video recording and computer vision analysis."""
     
-    def __init__(self, config: Dict):
+    def __init__(self, config: Dict[str, Any]):
         self.config = config
         self.logger = logging.getLogger("RecordingManager")
         
         # Check if we're in a GUI environment
         self.has_display = "DISPLAY" in os.environ or os.environ.get("TERM_PROGRAM") == "Apple_Terminal"
         
-        # Initialize MediaPipe
-        try:
-            self.mp_pose = mp.solutions.pose
-            self.mp_drawing = mp.solutions.drawing_utils
-            self.pose = self.mp_pose.Pose(
-                static_image_mode=False,
-                model_complexity=1,
-                smooth_landmarks=True,
-                min_detection_confidence=0.5,
-                min_tracking_confidence=0.5
-            )
-            self.logger.info("MediaPipe pose detection initialized successfully")
-        except Exception as e:
-            self.logger.error(f"Failed to initialize MediaPipe: {e}")
-            self.pose = None
+        # Initialize MediaPipe if not in test mode
+        if not TEST_MODE:
+            try:
+                # Import MediaPipe here to avoid dependency issues in test mode
+                import mediapipe as mp
+                self.mp = mp
+                self.mp_pose = mp.solutions.pose
+                self.mp_drawing = mp.solutions.drawing_utils
+                self.pose = self.mp_pose.Pose(
+                    static_image_mode=False,
+                    model_complexity=1,
+                    smooth_landmarks=True,
+                    min_detection_confidence=0.5,
+                    min_tracking_confidence=0.5
+                )
+                self.logger.info("MediaPipe pose detection initialized successfully")
+            except ImportError:
+                self.logger.warning("MediaPipe not available, pose detection will be limited")
+                self.mp = None
+                self.mp_pose = None
+                self.pose = None
         
         # Recording state
         self.is_recording = False
         self.current_recording = None
+        self.current_session_id = None
         self.metrics_queue = queue.Queue()
         
         # Create necessary directories
         self.recordings_dir = Path(self.config.get("recording", {}).get("storage", {}).get("recordings_dir", "data/recordings"))
         self.recordings_dir.mkdir(parents=True, exist_ok=True)
         
-    async def start_recording(self, session_id: str) -> Dict:
-        """Start a new recording session."""
+    async def start_recording(self, session_id: str) -> Dict[str, Any]:
+        """Start a recording session."""
         try:
+            self.logger.info(f"Starting recording session: {session_id}")
+            
+            # In test mode, simulate starting a recording
+            if TEST_MODE:
+                self.logger.info("TEST MODE: Simulating start of recording")
+                self.is_recording = True
+                self.current_session_id = session_id
+                self.current_recording = {
+                    'session_id': session_id,
+                    'start_time': datetime.now().isoformat()
+                }
+                return {
+                    "status": "success",
+                    "session_id": session_id,
+                    "timestamp": datetime.now().isoformat()
+                }
+                
             if not self.pose:
                 raise RuntimeError("MediaPipe pose detection not initialized")
                 
@@ -126,8 +154,49 @@ class RecordingManager:
     async def stop_recording(self) -> Dict:
         """Stop the current recording session."""
         try:
-            if not self.current_recording:
-                return {'error': 'No active recording session'}
+            if not self.is_recording:
+                return {"error": "No active recording session"}
+            
+            self.logger.info(f"Stopping recording session: {self.current_session_id}")
+            
+            # In test mode, simulate stopping a recording
+            if TEST_MODE:
+                self.logger.info("TEST MODE: Simulating stop of recording")
+                self.is_recording = False
+                
+                # Generate mock data for the session
+                recordings_dir = Path("data/recordings")
+                recordings_dir.mkdir(parents=True, exist_ok=True)
+                
+                video_path = recordings_dir / f"{self.current_session_id}_video.mp4"
+                
+                # Create empty files to simulate recording
+                with open(video_path, 'w') as f:
+                    f.write("Mock video file")
+                
+                filepath = recordings_dir / f"{self.current_session_id}.json"
+                
+                # Generate mock metrics
+                metrics = self._generate_mock_metrics()
+                
+                # Save mock results to file
+                with open(filepath, 'w') as f:
+                    json.dump({
+                        "session_id": self.current_session_id,
+                        "start_time": (datetime.now().timestamp() - 300),  # 5 minutes ago
+                        "end_time": datetime.now().timestamp(),
+                        "metrics": metrics
+                    }, f, indent=2)
+                
+                result = {
+                    "status": "success",
+                    "session_id": self.current_session_id,
+                    "filepath": str(filepath),
+                    "video_path": str(video_path)
+                }
+                
+                self.current_session_id = None
+                return result
             
             self.is_recording = False
             
@@ -342,6 +411,53 @@ class RecordingManager:
     async def get_realtime_metrics(self) -> Optional[PostureMetrics]:
         """Get the most recent posture metrics."""
         try:
+            if not self.is_recording:
+                return None
+                
+            # In test mode, generate random metrics
+            if TEST_MODE:
+                return self._generate_mock_realtime_metrics()
+                
+            # TODO: Implement actual real-time metrics collection
+            # This would include analyzing the current frame for posture
+            
+            # Placeholder for actual implementation
             return self.metrics_queue.get_nowait()
-        except queue.Empty:
-            return None 
+            
+        except Exception as e:
+            self.logger.error(f"Error getting real-time metrics: {e}")
+            return None
+    
+    def _generate_mock_metrics(self) -> List[Dict[str, Any]]:
+        """Generate mock metrics for testing."""
+        metrics = []
+        
+        # Generate 10 timepoints with random metrics
+        start_time = datetime.now()
+        for i in range(10):
+            timestamp = start_time.timestamp() + i * 30  # 30 seconds apart
+            metrics.append({
+                "timestamp": datetime.fromtimestamp(timestamp).isoformat(),
+                "shoulder_alignment": round(random.uniform(0.7, 0.95), 2),
+                "back_straightness": round(random.uniform(0.75, 0.95), 2),
+                "head_position": round(random.uniform(0.7, 0.9), 2),
+                "neck_angle": round(random.uniform(0.7, 0.9), 2),
+                "confidence": round(random.uniform(0.8, 0.98), 2),
+                "engagement": round(random.uniform(0.75, 0.95), 2)
+            })
+            
+        return metrics
+    
+    def _generate_mock_realtime_metrics(self) -> Dict[str, Any]:
+        """Generate mock real-time metrics for testing."""
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "posture": {
+                "shoulder_alignment": round(random.uniform(0.7, 0.95), 2),
+                "back_straightness": round(random.uniform(0.75, 0.95), 2),
+                "head_position": round(random.uniform(0.7, 0.9), 2),
+                "neck_angle": round(random.uniform(0.7, 0.9), 2)
+            },
+            "confidence": round(random.uniform(0.8, 0.98), 2),
+            "engagement": round(random.uniform(0.75, 0.95), 2)
+        } 

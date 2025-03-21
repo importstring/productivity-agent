@@ -24,6 +24,10 @@ import time
 import os
 import pyaudio
 import wave
+import random
+
+# Add test mode flag
+TEST_MODE = os.environ.get("TEST_MODE", "false").lower() == "true"
 
 class OllamaClient:
     def __init__(self, model: str = "2.1b"):
@@ -68,6 +72,23 @@ class QuestionRecorder:
     async def start_recording(self, session_id: str) -> Dict:
         """Start recording a response."""
         try:
+            self.logger.info(f"Starting recording session: {session_id}")
+            
+            # In test mode, simulate starting a recording
+            if TEST_MODE:
+                self.logger.info("TEST MODE: Simulating start of recording")
+                self.is_recording = True
+                self.current_recording = {
+                    'session_id': session_id,
+                    'start_time': datetime.now().isoformat(),
+                    'metrics': []
+                }
+                return {
+                    "status": "success",
+                    "session_id": session_id,
+                    "timestamp": datetime.now().isoformat()
+                }
+                
             # Initialize video capture
             cap = cv2.VideoCapture(0)
             if not cap.isOpened():
@@ -116,7 +137,8 @@ class QuestionRecorder:
                 'audio_path': audio_path,
                 'session_id': session_id,
                 'start_time': datetime.now().isoformat(),
-                'audio_frames': []
+                'audio_frames': [],
+                'metrics': []
             }
             
             # Start recording threads
@@ -127,8 +149,7 @@ class QuestionRecorder:
             return {
                 "status": "success",
                 "session_id": session_id,
-                "video_path": str(video_path),
-                "audio_path": str(audio_path)
+                "timestamp": datetime.now().isoformat()
             }
         except Exception as e:
             self.logger.error(f"Failed to start recording: {e}")
@@ -140,6 +161,44 @@ class QuestionRecorder:
             if not self.current_recording:
                 return {"error": "No active recording session"}
             
+            self.logger.info(f"Stopping recording session: {self.current_recording['session_id']}")
+            
+            # In test mode, simulate stopping a recording
+            if TEST_MODE:
+                self.logger.info("TEST MODE: Simulating stop of recording")
+                self.is_recording = False
+                
+                # Generate mock data for the session
+                recordings_dir = Path("data/recordings")
+                recordings_dir.mkdir(parents=True, exist_ok=True)
+                
+                video_path = recordings_dir / f"{self.current_recording['session_id']}_video.mp4"
+                audio_path = recordings_dir / f"{self.current_recording['session_id']}_audio.wav"
+                
+                # Create empty files to simulate recording
+                with open(video_path, 'w') as f:
+                    f.write("Mock video file")
+                    
+                with open(audio_path, 'w') as f:
+                    f.write("Mock audio file")
+                
+                result = {
+                    "status": "success",
+                    "session_id": self.current_recording['session_id'],
+                    "end_time": datetime.now().isoformat(),
+                    "filepath": str(recordings_dir / f"{self.current_recording['session_id']}.json"),
+                    "video_path": str(video_path),
+                    "audio_path": str(audio_path),
+                    "metrics": self._generate_mock_metrics()
+                }
+                
+                # Save mock results to file
+                with open(recordings_dir / f"{self.current_recording['session_id']}.json", 'w') as f:
+                    json.dump(result, f, indent=2)
+                
+                self.current_recording = None
+                return result
+                
             self.is_recording = False
             
             # Release resources
@@ -162,10 +221,14 @@ class QuestionRecorder:
             return {
                 "status": "success",
                 "session_id": self.current_recording['session_id'],
+                "end_time": datetime.now().isoformat(),
+                "filepath": f"data/recordings/{self.current_recording['session_id']}.json",
                 "analysis": analysis
             }
         except Exception as e:
             self.logger.error(f"Failed to stop recording: {e}")
+            self.is_recording = False
+            self.current_recording = None
             return {"error": str(e)}
     
     def _recording_thread(self):
@@ -353,7 +416,96 @@ class QuestionRecorder:
     
     async def get_realtime_metrics(self) -> Optional[Dict]:
         """Get real-time metrics during recording."""
-        return None
+        try:
+            if not self.is_recording:
+                return None
+                
+            # In test mode, generate random metrics
+            if TEST_MODE:
+                return self._generate_mock_realtime_metrics()
+                
+            # TODO: Implement actual real-time metrics collection
+            # This would include analyzing the current frame and audio
+            
+            # Placeholder for actual implementation
+            return {
+                "timestamp": datetime.now().isoformat(),
+                "posture": {
+                    "shoulder_alignment": 0.85,
+                    "back_straightness": 0.78,
+                    "head_position": 0.82
+                },
+                "speech": {
+                    "volume": 0.75,
+                    "clarity": 0.82,
+                    "speaking_rate": 145.3
+                }
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error getting real-time metrics: {e}")
+            return None
+    
+    def _generate_mock_metrics(self) -> List[Dict]:
+        """Generate mock metrics for testing."""
+        metrics = []
+        
+        # Generate 10 timepoints with random metrics
+        start_time = datetime.now()
+        for i in range(10):
+            timestamp = start_time.timestamp() + i * 30  # 30 seconds apart
+            metrics.append({
+                "timestamp": datetime.fromtimestamp(timestamp).isoformat(),
+                "posture": {
+                    "shoulder_alignment": round(random.uniform(0.7, 0.95), 2),
+                    "back_straightness": round(random.uniform(0.75, 0.95), 2),
+                    "head_position": round(random.uniform(0.7, 0.9), 2),
+                    "neck_angle": round(random.uniform(0.7, 0.9), 2)
+                },
+                "speech": {
+                    "volume": round(random.uniform(0.7, 0.9), 2),
+                    "clarity": round(random.uniform(0.75, 0.95), 2),
+                    "speaking_rate": round(random.uniform(120, 160), 1),
+                    "pitch_variance": round(random.uniform(0.6, 0.85), 2)
+                },
+                "engagement": {
+                    "eye_contact": round(random.uniform(0.65, 0.9), 2),
+                    "facial_expression": round(random.uniform(0.7, 0.9), 2),
+                    "hand_gestures": round(random.uniform(0.6, 0.85), 2)
+                },
+                "content": {
+                    "relevance": round(random.uniform(0.8, 0.98), 2),
+                    "structure": round(random.uniform(0.75, 0.95), 2),
+                    "conciseness": round(random.uniform(0.7, 0.9), 2),
+                    "word_choice": round(random.uniform(0.75, 0.95), 2)
+                }
+            })
+            
+        return metrics
+    
+    def _generate_mock_realtime_metrics(self) -> Dict:
+        """Generate mock real-time metrics for testing."""
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "posture": {
+                "shoulder_alignment": round(random.uniform(0.7, 0.95), 2),
+                "back_straightness": round(random.uniform(0.75, 0.95), 2),
+                "head_position": round(random.uniform(0.7, 0.9), 2)
+            },
+            "speech": {
+                "volume": round(random.uniform(0.7, 0.9), 2),
+                "clarity": round(random.uniform(0.75, 0.95), 2),
+                "speaking_rate": round(random.uniform(120, 160), 1)
+            },
+            "engagement": {
+                "eye_contact": round(random.uniform(0.65, 0.9), 2),
+                "facial_expression": round(random.uniform(0.7, 0.9), 2)
+            },
+            "content": {
+                "relevance": round(random.uniform(0.8, 0.98), 2),
+                "word_choice": round(random.uniform(0.75, 0.95), 2)
+            }
+        }
     
     async def process_daily_reflection(self, text: str, date: str) -> Dict:
         """Process daily reflection text."""
