@@ -1,34 +1,10 @@
-# Posture Recording and Analysis System
+# Productivity Agent System
 
-This system allows you to record posture videos and get them analyzed automatically using email-based submission.
+A comprehensive system for improving personal productivity, communication skills, and presentation abilities through automated recording, analysis, and feedback.
 
 ## Setup Instructions
 
-### 1. Yahoo Mail Setup
-
-The system is configured to use communication_analysis@yahoo.com. You'll need to:
-
-1. Generate an App Password (required for security):
-
-   - Sign in to your Yahoo account
-   - Go to Account Security settings (click on your name > Account info > Account security)
-   - Scroll down to "Generate app password"
-   - Select "Other app" from the dropdown
-   - Enter "Posture Analysis" as the app name
-   - Click "Generate"
-   - Copy the generated 16-character password
-
-2. Set up environment variables:
-
-   ```bash
-   # On Windows (Command Prompt)
-   set EMAIL_PASSWORD=your-16-char-app-password
-
-   # On Mac/Linux
-   export EMAIL_PASSWORD=your-16-char-app-password
-   ```
-
-### 2. Install Dependencies
+### 1. Install Dependencies
 
 1. Install Python 3.8 or higher
 2. Install the required dependencies:
@@ -36,86 +12,135 @@ The system is configured to use communication_analysis@yahoo.com. You'll need to
    pip install -r requirements.txt
    ```
 
-### 3. Record and Send Videos
+### 2. Configuration
 
-1. Run the recording script:
-   ```bash
-   python src/utils/record_and_send.py
-   ```
-2. The script will:
-   - Open your camera
-   - Show a preview window
-   - Record for 5 minutes (or press 'q' to stop early)
-   - Automatically send the recording to communication_analysis@yahoo.com
-   - Save a local copy in the `recordings` directory
+The system uses a configuration file located at `src/config/system_config.json`. This file contains settings for:
 
-### 4. Analysis Server Setup
+- Logging configuration
+- Agent parameters
+- Data storage paths
 
-1. On your Windows computer, set up the same environment variable:
-   ```bash
-   set EMAIL_PASSWORD=your-16-char-app-password
-   ```
-2. Run the analysis server:
-   ```bash
-   python src/utils/email_recording.py
-   ```
-3. The server will:
-   - Monitor communication_analysis@yahoo.com for new recordings
-   - Process any received videos
-   - Send back analysis results via email
+### 3. Running the Application
 
-## Features
+#### Standard Mode
 
-- Video recording with preview
-- Email-based submission and analysis
-- Pose detection and analysis using MediaPipe
-- Calculation of posture metrics:
-  - Shoulder alignment
-  - Back straightness
-  - Head position
-  - Neck angle
-- Automatic saving of recordings and analysis summaries
-- Personalized recommendations based on analysis
+Run the main application:
 
-## Output
+```bash
+python main.py
+```
 
-The system generates two types of files for each recording session:
+The application will present a menu with options:
 
-1. Video file: `recordings/recording_YYYYMMDD_HHMMSS.mp4`
-2. Analysis summary: `recordings/recording_YYYYMMDD_HHMMSS.json`
+1. Record posture (5 minutes)
+2. Run nightly analysis
+3. Answer verbal questions
+4. Answer written questions
+5. Insert data
+   q. Quit
 
-The summary file contains:
+#### Test Mode
 
-- Session duration
-- Average posture metrics
-- Frame-by-frame metrics history
-- Personalized recommendations
+To run the application in test mode (which uses mock data and doesn't require external services):
+
+```bash
+export TEST_MODE=true
+python main.py
+```
+
+Or run the automated test script:
+
+```bash
+python test_app.py
+```
+
+## System Components
+
+### Multi-Agent System
+
+The productivity agent uses a multi-agent system with specialized agents:
+
+- **Product Manager Agent**: Coordinates the overall productivity enhancement process
+- **Research Agent**: Gathers information on productivity topics
+- **Insights Agent**: Analyzes data and generates actionable insights
+- **Nightly Analysis Agent**: Performs comprehensive analysis of recordings
+
+### Recording Capabilities
+
+- **Posture Recording**: Records and analyzes body posture during presentations
+- **Speech Recording**: Analyzes speech patterns, clarity, and tone
+- **Question Answering**: Records and analyzes responses to questions
+
+### Data Management
+
+The system stores data in organized directories:
+
+- `data/recordings`: Video and audio recordings
+- `data/analysis`: Analysis results
+- `data/questions`: Questions and responses
+- `data/schedule`, `data/fitness`, etc.: Topic-specific data
+
+## Daily Workflow
+
+### Morning Routine
+
+1. Review the nightly analysis
+2. Record a practice session
+3. Answer verbal questions
+4. Get real-time feedback on posture and speech
+
+### Evening Routine
+
+1. Answer written questions
+2. Insert data from the day
+3. Set up nightly analysis to run on Windows machine
+
+## Usage Examples
+
+### Recording Posture
+
+Select option 1 from the main menu to start a posture recording session. The system will:
+
+- Record video for 5 minutes
+- Analyze your posture in real-time
+- Save the recording for later analysis
+
+### Answering Questions
+
+Create a `questions.json` file in the `data/questions` directory with your questions:
+
+```json
+{
+  "questions": [
+    "How can I improve my public speaking skills?",
+    "What strategies help with time management?"
+  ]
+}
+```
+
+Then select option 4 from the main menu to get responses.
+
+## Advanced Features
+
+### Remote Processing
+
+The system supports recording on one device and processing on another (e.g., Windows machine):
+
+1. Record on your main device
+2. Transfer the recordings to your Windows machine
+3. Run nightly analysis on the Windows machine
+
+### Custom Prompts
+
+The system can provide random prompts for speaking practice during recording sessions, helping you improve impromptu speaking skills.
 
 ## Troubleshooting
 
-1. Email Issues:
+If you encounter issues:
 
-   - Make sure you're using the App Password, not your regular Yahoo password
-   - Check your Yahoo spam folder if emails aren't arriving
-   - Verify that the App Password was generated correctly
-
-2. Camera Issues:
-
-   - Ensure the camera is not being used by another application
-   - Check camera permissions on your device
-   - Try restarting the recording application
-
-3. Performance Issues:
-   - Reduce the video resolution in the configuration
-   - Check available disk space
-   - Monitor system resources
-
-## Security Notes
-
-- The system uses Yahoo Mail's secure SSL/TLS protocols
-- App Passwords are required for security
-- Keep your App Password secure and never share it
-- The system only communicates with communication_analysis@yahoo.com
+1. Check the logs in the `logs` directory
+2. Run in test mode to verify basic functionality
+3. Ensure all dependencies are installed correctly
 
 ## Contributing
 
